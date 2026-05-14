@@ -1,0 +1,205 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: base42-cms
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: base42-cms
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: strapi-uploads
+  namespace: base42-cms
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: base42-cms
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16
+          envFrom:
+            - secretRef:
+                name: cms-secrets
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: cms-secrets
+                  key: DATABASE_USERNAME
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: cms-secrets
+                  key: DATABASE_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: cms-secrets
+                  key: DATABASE_NAME
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "cms"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "cms"]
+            initialDelaySeconds: 15
+            periodSeconds: 30
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: postgres-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: base42-cms
+  labels:
+    app: postgres
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cms
+  namespace: base42-cms
+  labels:
+    app: cms
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cms
+  template:
+    metadata:
+      labels:
+        app: cms
+    spec:
+      containers:
+        - name: cms
+          image: ghcr.io/42dotmk/42dotmk-cms:latest
+          envFrom:
+            - secretRef:
+                name: cms-secrets
+          env:
+            - name: DATABASE_HOST
+              value: postgres
+            - name: DATABASE_CLIENT
+              value: postgres
+            - name: DATABASE_PORT
+              value: "5432"
+          ports:
+            - name: http
+              containerPort: 1337
+          volumeMounts:
+            - name: strapi-uploads
+              mountPath: /app/public/uploads
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 1337
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 1337
+            initialDelaySeconds: 60
+            periodSeconds: 30
+      volumes:
+        - name: strapi-uploads
+          persistentVolumeClaim:
+            claimName: strapi-uploads
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cms
+  namespace: base42-cms
+  labels:
+    app: cms
+spec:
+  selector:
+    app: cms
+  ports:
+    - name: http
+      port: 1337
+      targetPort: 1337
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cms
+  namespace: base42-cms
+  labels:
+    app: cms
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: cms.kube.42.mk
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: cms
+                port:
+                  number: 1337
