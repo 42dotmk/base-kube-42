@@ -141,9 +141,9 @@ spec:
           ports:
             - name: http
               containerPort: 1337
-          volumeMounts:
-            - name: strapi-uploads
-              mountPath: /app/public/uploads
+          # volumeMounts:
+          #   - name: strapi-uploads
+          #     mountPath: /app/public/uploads
           resources:
             requests:
               cpu: 100m
@@ -163,10 +163,10 @@ spec:
               port: 1337
             initialDelaySeconds: 60
             periodSeconds: 30
-      volumes:
-        - name: strapi-uploads
-          persistentVolumeClaim:
-            claimName: strapi-uploads
+      # volumes:
+      #   - name: strapi-uploads
+      #     persistentVolumeClaim:
+      #       claimName: strapi-uploads
 ---
 apiVersion: v1
 kind: Service
