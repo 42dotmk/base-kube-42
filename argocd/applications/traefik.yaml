@@ -14,10 +14,6 @@ spec:
         service:
           spec:
             loadBalancerIP: "10.10.0.200"
-        ports:
-          websecure:
-            tls:
-              enabled: true
   destination:
     server: https://kubernetes.default.svc
     namespace: traefik

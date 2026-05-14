@@ -156,21 +156,15 @@ metadata:
   name: uptime-kuma
   namespace: uptime-kuma
 spec:
+  ingressClassName: traefik
   rules:
-      - host: status.base42.local  # The hostname to match.
-                                 # For this to work, "status.base42.local"
-                                 # must resolve to 10.10.0.200 (Traefik's IP).
-                                 # You can do this via:
-                                 #   1. /etc/hosts on your machine
-                                 #   2. Local DNS server
-                                 #   3. Real domain with DNS pointing here
+    - host: status.base42.local
       http:
         paths:
           - path: /
-            pathType: Prefix     # Prefix = match this path and anything under it
-                                 # "/" matches everything (all paths)
+            pathType: Prefix
             backend:
               service:
-                name: uptime-kuma  # Forward to this Service
+                name: uptime-kuma
                 port:
-                  number: 80       # On this port (the Service port, not the Pod port)
+                  number: 80
