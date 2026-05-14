@@ -6,7 +6,7 @@ metadata:
 spec:
   generators:
     - git:
-        repoURL: git@github.com:42dotmk/42k8s.git
+        repoURL: git@github.com:42dotmk/base-kube-42.git
         revision: main
         directories:
           - path: infra/*
@@ -16,7 +16,7 @@ spec:
     spec:
       project: default
       source:
-        repoURL: git@github.com:42dotmk/42k8s.git
+        repoURL: git@github.com:42dotmk/base-kube-42.git
         targetRevision: main
         path: "{{path}}"
       destination:
