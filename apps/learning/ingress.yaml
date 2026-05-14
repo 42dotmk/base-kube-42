@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: learning
+  namespace: learning
+  labels:
+    app.kubernetes.io/part-of: learning
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: 42k8s.ferdzo.xyz
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hello
+                port:
+                  number: 80
+          - path: /echo
+            pathType: Prefix
+            backend:
+              service:
+                name: echo
+                port:
+                  number: 80

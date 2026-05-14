@@ -1,0 +1,176 @@
+# Deploying Uptime Kuma — Step by Step
+#
+# This file creates everything in order. You could also split each "---"
+# section into its own file. Kubernetes processes them top-to-bottom.
+#
+# Apply with:   kubectl apply -f uptime-kuma.yaml
+# Delete with:  kubectl delete -f uptime-kuma.yaml
+# Check status: kubectl get all -n uptime-kuma
+
+# ============================================================
+# STEP 1: Namespace
+# ============================================================
+# A namespace is like a folder. It keeps this app's resources
+# separate from everything else. When you do "kubectl get pods"
+# you only see the default namespace. Use "-n uptime-kuma" to
+# see this app, or "-A" to see everything.
+#
+# Why bother? Organization. When you have 20 apps, namespaces
+# prevent name collisions and let you set per-app resource quotas.
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: uptime-kuma
+
+---
+
+# ============================================================
+# STEP 2: Deployment
+# ============================================================
+# This tells Kubernetes: "Run 1 copy of the Uptime Kuma container,
+# and if it ever crashes, restart it automatically."
+#
+# Key fields explained inline:
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: uptime-kuma
+  namespace: uptime-kuma         # Deploy into our namespace
+  labels:
+    app: uptime-kuma             # Labels are key-value tags for filtering
+spec:
+  replicas: 1                    # How many copies to run. 1 is fine for
+                                 # stateful apps (Uptime Kuma stores data
+                                 # in a local SQLite DB)
+
+  selector:
+    matchLabels:
+      app: uptime-kuma           # "This Deployment manages Pods that have
+                                 # the label app=uptime-kuma"
+                                 # MUST match the template labels below.
+
+  template:                      # This is the Pod template — the "blueprint"
+                                 # for each replica
+    metadata:
+      labels:
+        app: uptime-kuma         # Must match selector above. This is how
+                                 # the Deployment finds its Pods, and how
+                                 # the Service finds them too.
+    spec:
+      containers:
+        - name: uptime-kuma
+          image: louislam/uptime-kuma:1  # The container image from Docker Hub.
+                                         # ":1" means latest v1.x. In production
+                                         # you'd pin to a specific version like
+                                         # ":1.23.11" to avoid surprise upgrades.
+
+          ports:
+            - containerPort: 3001  # The port Uptime Kuma listens on INSIDE
+                                   # the container. This is informational —
+                                   # it doesn't actually open anything.
+                                   # The Service below does the real wiring.
+
+          # Resource requests and limits:
+          # - requests: guaranteed minimum. Scheduler uses this to pick a node.
+          # - limits: hard cap. Container gets killed if it exceeds memory limit.
+          #
+          # Without these, one runaway pod could eat all node resources.
+          resources:
+            requests:
+              cpu: 100m           # 0.1 CPU cores (100 "millicores")
+              memory: 128Mi       # 128 megabytes
+            limits:
+              cpu: 500m           # 0.5 CPU cores max
+              memory: 256Mi       # 256 MB max (OOM-killed if exceeded)
+
+          # Liveness probe: "Is the app still alive?"
+          # If this fails, Kubernetes RESTARTS the container.
+          livenessProbe:
+            httpGet:
+              path: /             # Hit the root URL
+              port: 3001
+            initialDelaySeconds: 15  # Wait 15s after start before checking
+            periodSeconds: 30        # Check every 30s
+
+          # Readiness probe: "Is the app ready to receive traffic?"
+          # If this fails, the Service STOPS sending traffic to this pod
+          # (but doesn't restart it). Useful during startup or under heavy load.
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3001
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+---
+
+# ============================================================
+# STEP 3: Service
+# ============================================================
+# A Service gives your Pods a stable address. Without it, you'd
+# have to track Pod IPs which change every time a Pod restarts.
+#
+# This creates a ClusterIP service (internal only). Other pods
+# in the cluster can reach it at:
+#   uptime-kuma.uptime-kuma.svc.cluster.local:80
+#   (or just "uptime-kuma.uptime-kuma" for short)
+#
+# External access comes from the Ingress below, not from here.
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: uptime-kuma
+  namespace: uptime-kuma
+spec:
+  type: ClusterIP                # Internal only. No MetalLB IP needed —
+                                 # Traefik will handle external access.
+
+  selector:
+    app: uptime-kuma             # "Route traffic to pods with this label"
+                                 # This MUST match the Pod's labels above.
+
+  ports:
+    - port: 80                   # The port the Service listens on.
+                                 # Other pods call "uptime-kuma:80"
+      targetPort: 3001           # Forward to this port on the Pod.
+                                 # Service:80 → Pod:3001
+
+---
+
+# ============================================================
+# STEP 4: Ingress
+# ============================================================
+# An Ingress tells Traefik: "When someone requests this hostname,
+# send the traffic to this Service."
+#
+# Without Ingress, you'd need a separate LoadBalancer IP per app.
+# With Ingress, ALL apps share Traefik's single IP (10.10.0.200)
+# and Traefik routes based on the hostname in the HTTP request.
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: uptime-kuma
+  namespace: uptime-kuma
+spec:
+  rules:
+      - host: status.base42.local  # The hostname to match.
+                                 # For this to work, "status.base42.local"
+                                 # must resolve to 10.10.0.200 (Traefik's IP).
+                                 # You can do this via:
+                                 #   1. /etc/hosts on your machine
+                                 #   2. Local DNS server
+                                 #   3. Real domain with DNS pointing here
+      http:
+        paths:
+          - path: /
+            pathType: Prefix     # Prefix = match this path and anything under it
+                                 # "/" matches everything (all paths)
+            backend:
+              service:
+                name: uptime-kuma  # Forward to this Service
+                port:
+                  number: 80       # On this port (the Service port, not the Pod port)
