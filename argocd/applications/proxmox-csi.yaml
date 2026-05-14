@@ -1,0 +1,46 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: proxmox-csi
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: ghcr.io/sergelogvinov/charts
+    chart: proxmox-csi-plugin
+    targetRevision: 0.2.*
+    helm:
+      values: |
+        existingConfigSecret: proxmox-csi-plugin
+
+        node:
+          nodeSelector: {}
+          tolerations:
+            - operator: Exists
+
+        controller:
+          nodeSelector:
+            node-role.kubernetes.io/control-plane: ""
+          tolerations:
+            - key: node-role.kubernetes.io/control-plane
+              effect: NoSchedule
+
+        storageClass:
+          - name: proxmox-lvm
+            storage: local-lvm
+            reclaimPolicy: Delete
+            fstype: ext4
+            annotations:
+              storageclass.kubernetes.io/is-default-class: "true"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: csi-proxmox
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
+    syncOptions:
+      - ServerSideApply=true
+    managedNamespaceMetadata:
+      labels:
+        pod-security.kubernetes.io/enforce: privileged
