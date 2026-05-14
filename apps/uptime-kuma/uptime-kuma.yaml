@@ -158,7 +158,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-    - host: status.base42.local
+    - host: status.kube.42.mk
       http:
         paths:
           - path: /
