@@ -15,7 +15,10 @@ spec:
           persistence:
             enabled: true
             size: 2Gi
-          adminPassword: base42admin
+          admin:
+            existingSecret: grafana-admin-secret
+            userKey: admin-user
+            passwordKey: admin-password
           ingress:
             enabled: true
             ingressClassName: traefik
