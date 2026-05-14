@@ -25,7 +25,7 @@ spec:
           image: ghcr.io/42dotmk/42dotmk-frontend:latest
           env:
             - name: STRAPI_URL
-              value: "https://cms.42.mk/api/"
+              value: "https://cms.kube.42.mk/api/"
           ports:
             - name: http
               containerPort: 8080
