@@ -21,9 +21,40 @@ spec:
             ingressClassName: traefik
             hosts:
               - grafana.kube.42.mk
+          dashboardProviders:
+            dashboardproviders.yaml:
+              apiVersion: 1
+              providers:
+                - name: grafana-dashboards
+                  orgId: 1
+                  folder: Community
+                  type: file
+                  disableDeletion: false
+                  editable: true
+                  options:
+                    path: /var/lib/grafana/dashboards/grafana-dashboards
+          dashboards:
+            grafana-dashboards:
+              traefik:
+                gnetId: 17346
+                revision: 9
+                datasource: Prometheus
+              argocd:
+                gnetId: 14584
+                revision: 1
+                datasource: Prometheus
+              blackbox:
+                gnetId: 7587
+                revision: 3
+                datasource: Prometheus
         prometheus:
           prometheusSpec:
             retention: 14d
+            serviceMonitorSelectorNilUsesHelmValues: false
+            serviceMonitorSelector:
+              matchLabels:
+                release: monitoring
+            serviceMonitorNamespaceSelector: {}
             storageSpec:
               volumeClaimTemplate:
                 spec:

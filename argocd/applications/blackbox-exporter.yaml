@@ -1,0 +1,40 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: blackbox-exporter
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: prometheus-blackbox-exporter
+    targetRevision: 9.4.0
+    helm:
+      values: |
+        serviceMonitor:
+          enabled: true
+          defaults:
+            labels:
+              release: monitoring
+          targets:
+            - name: kube-42-mk
+              url: https://kube.42.mk
+              interval: 60s
+            - name: cms-kube-42-mk
+              url: https://cms.kube.42.mk
+              interval: 60s
+            - name: argo-kube-42-mk
+              url: https://argo.kube.42.mk
+              interval: 60s
+            - name: grafana-kube-42-mk
+              url: https://grafana.kube.42.mk
+              interval: 60s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
+    syncOptions:
+      - CreateNamespace=true
